@@ -25,27 +25,50 @@ On the **host** machine:
 - OpenSSH client (`ssh-keygen`) — present by default on modern Windows
 - [PowerShell 7+](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows) (`pwsh`) — preferred
 
-
-
 ## Usage
 
-### Clone
+### Install
+
+Recommended (registers the Explorer context menu; UAC prompt):
+
+```powershell
+irm https://raw.githubusercontent.com/gerneio/CursorWindowsSandbox/main/install.ps1 | iex; Install-CursorWindowsSandbox -RegisterContextMenu
+```
+
+Force re-install:
+
+```powershell
+irm https://raw.githubusercontent.com/gerneio/CursorWindowsSandbox/main/install.ps1 | iex; Install-CursorWindowsSandbox -RegisterContextMenu -Force
+```
+
+Optional arguments:
+
+- `-RegisterContextMenu` — register “Open with Cursor Sandbox” on folders in Explorer (UAC prompt)
+- `-Force` — overwrite the install folder if it already exists (otherwise the installer fails early)
+- `-InstallPath 'D:\tools\CursorWindowsSandbox'` — destination (default: `%USERPROFILE%\source\repos\CursorWindowsSandbox`)
+
+Or clone instead:
 
 ```powershell
 git clone https://github.com/gerneio/CursorWindowsSandbox.git
 cd CursorWindowsSandbox
+# optional: .\scripts\Create-CursorSandboxWindowsContextMenu.ps1  (elevated)
 ```
+
+
 
 ### Launch
 
-From this repo (or pass an absolute path to the script):
+If you registered the Explorer context menu, right-click a folder (or empty space in a folder) and choose **Open with Cursor Sandbox**.
+
+Or run the start script from this repo (or pass an absolute path):
 
 ```powershell
 .\scripts\Start-CursorSandbox.ps1 -MappedFolder 'C:\path\to\project'
 # omit -MappedFolder to use the current directory
 ```
 
-That starts the sandbox if needed, waits for SSH, shares the folder, and opens Cursor remotely. Prefer this over opening the `.wsb` by hand. You can also register an Explorer entry once with `scripts\Create-CursorSandboxWindowsContextMenu.ps1` (elevated).
+Either path starts the sandbox if needed, waits for SSH, shares the folder, and opens Cursor remotely. Do not open the `.wsb` file directly.
 
 First boot installs WinGet, SSH, Terminal, the Cursor server, and anything in `winget-apps.json`—expect several minutes. Later runs reuse the package cache when possible.
 
@@ -71,7 +94,8 @@ The start script maintains a `windows-sandbox` host entry in your user `~/.ssh/c
 
 To open the current workspace over the sandbox from inside an editor, add a `tasks.json` (adjust the script path):
 
-Example `tasks.json`
+<details>
+<summary>Example <code>tasks.json</code></summary>
 
 ```json
 {
@@ -115,7 +139,7 @@ Example `tasks.json`
 }
 ```
 
-
+</details>
 
 If the sandbox is already up and the folder is mapped, you can instead open with our start/context script, or use:
 
@@ -126,8 +150,6 @@ cursor --folder-uri vscode-remote://ssh-remote+windows-sandbox/C:/Users/WDAGUtil
 
 
 ## Configuration
-
-
 
 ### `wsb/Windows Sandbox Cursor.wsb`
 
@@ -147,7 +169,7 @@ Optional WinGet [import](https://learn.microsoft.com/en-us/windows/package-manag
 
 ### Explorer context menu (`scripts/Create-CursorSandboxWindowsContextMenu.ps1`)
 
-Optional: register “Open with Cursor Sandbox” on folders in explorer.
+Optional: register “Open with Cursor Sandbox” on folders in Explorer. Prefer `Install-CursorWindowsSandbox -RegisterContextMenu`, or run this script elevated after a clone.
 
 ## Faster workflows
 
