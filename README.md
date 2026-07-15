@@ -29,7 +29,12 @@ On the **host** machine:
 
 ## Usage
 
+### Clone
 
+```powershell
+git clone https://github.com/gerneio/CursorWindowsSandbox.git
+cd CursorWindowsSandbox
+```
 
 ### Launch
 
