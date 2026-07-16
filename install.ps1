@@ -13,14 +13,18 @@
     irm https://raw.githubusercontent.com/gerneio/CursorWindowsSandbox/main/install.ps1 | iex; Install-CursorWindowsSandbox -RegisterContextMenu -Force
 
 .PARAMETER InstallPath
-  Destination folder for the repo. Defaults to %USERPROFILE%\source\repos\CursorWindowsSandbox.
+  Destination folder for the repo. If omitted (and -Force is not set), you are prompted
+  to confirm the default (%USERPROFILE%\source\repos\CursorWindowsSandbox) or type a
+  different path.
 
 .PARAMETER RegisterContextMenu
-  After install, run scripts\Create-CursorSandboxWindowsContextMenu.ps1 (elevated) to add
+  After install, run scripts\Create-CursorSandboxWindowsContextMenu.ps1 to add
   "Open with Cursor Sandbox" to Explorer.
 
 .PARAMETER Force
-  Overwrite InstallPath if it already exists. Without this, the installer fails early.
+  Overwrite InstallPath if it already exists, and skip the install-path confirmation
+  prompt when InstallPath was not passed. Without this, the installer fails early if
+  the path already exists.
 #>
 
 New-Module -Name CursorWindowsSandboxBootstrap -ScriptBlock {
@@ -37,6 +41,14 @@ New-Module -Name CursorWindowsSandboxBootstrap -ScriptBlock {
 
         $RepoZipUrl = 'https://github.com/gerneio/CursorWindowsSandbox/archive/refs/heads/main.zip'
         $ZipLeaf = 'CursorWindowsSandbox-main'
+
+        if (-not $PSBoundParameters.ContainsKey('InstallPath') -and -not $Force) {
+            Write-Host "Install path: $InstallPath"
+            $response = Read-Host "Press Enter to confirm, or type a different path"
+            if (-not [string]::IsNullOrWhiteSpace($response)) {
+                $InstallPath = $response.Trim().Trim('"')
+            }
+        }
 
         $InstallPath = [System.IO.Path]::GetFullPath($InstallPath)
         if ((Test-Path -LiteralPath $InstallPath) -and -not $Force) {
@@ -79,16 +91,13 @@ New-Module -Name CursorWindowsSandboxBootstrap -ScriptBlock {
                     throw "Context menu script not found: $contextScript"
                 }
 
+                # Child process (not &-invoke): the context script calls exit, which would tear down this session.
                 $shell = if (Get-Command pwsh -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
-                Write-Host "Registering Explorer context menu (elevation required)..."
-                $proc = Start-Process -FilePath $shell -Verb RunAs -Wait -PassThru -ArgumentList @(
-                    '-NoProfile',
-                    '-ExecutionPolicy', 'Bypass',
-                    '-File', $contextScript
-                )
-                if ($null -eq $proc -or $proc.ExitCode -ne 0) {
-                    $code = if ($proc) { $proc.ExitCode } else { 'unknown' }
-                    Write-Warning "Context menu registration finished with exit code $code. You can re-run:`n  $contextScript"
+                Write-Host "Registering Explorer context menu..."
+                $output = & $shell -NoProfile -ExecutionPolicy Bypass -File $contextScript 2>&1 | Out-String
+                if ($LASTEXITCODE -ne 0) {
+                    $detail = if (-not [string]::IsNullOrWhiteSpace($output)) { "`n" + $output.TrimEnd() } else { '' }
+                    Write-Warning "Context menu registration finished with exit code $LASTEXITCODE.$detail`nYou can re-run:`n  $contextScript"
                 }
             }
             else {

@@ -23,41 +23,56 @@ On the **host** machine:
 - The Windows Sandbox `wsb` CLI on `PATH` (included with recent Sandbox releases)
 - Networking available to the sandbox (bootstrap downloads WinGet, Terminal, Cursor server, etc.)
 - OpenSSH client (`ssh-keygen`) — present by default on modern Windows
-- [PowerShell 7+](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows) (`pwsh`) — preferred
+- [PowerShell 7+](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows) (`pwsh`)
 
 ## Usage
 
 ### Install
 
-Recommended (registers the Explorer context menu; UAC prompt):
+Pick a path: **quick install** (`irm | iex`) or **clone** (reviewable, no remote execute).
+
+#### Quick install
+
+> [!WARNING]
+> Downloads a script from the internet and runs it in your current PowerShell session (`irm … | iex`). Only do this if you trust the source. Prefer reviewing [`install.ps1`](https://github.com/gerneio/CursorWindowsSandbox/blob/main/install.ps1) first, or use the clone path below.
 
 ```powershell
 irm https://raw.githubusercontent.com/gerneio/CursorWindowsSandbox/main/install.ps1 | iex; Install-CursorWindowsSandbox -RegisterContextMenu
 ```
 
-Force re-install:
-
-```powershell
-irm https://raw.githubusercontent.com/gerneio/CursorWindowsSandbox/main/install.ps1 | iex; Install-CursorWindowsSandbox -RegisterContextMenu -Force
-```
-
 Optional arguments:
 
-- `-RegisterContextMenu` — register “Open with Cursor Sandbox” on folders in Explorer (UAC prompt)
-- `-Force` — overwrite the install folder if it already exists (otherwise the installer fails early)
-- `-InstallPath 'D:\tools\CursorWindowsSandbox'` — destination (default: `%USERPROFILE%\source\repos\CursorWindowsSandbox`)
+- `-RegisterContextMenu` — register “Open with Cursor Sandbox” on folders in Explorer
+- `-Force` — overwrite the install folder if it already exists, and skip the install-path confirmation prompt when `-InstallPath` was not passed
+- `-InstallPath 'D:\tools\CursorWindowsSandbox'` — destination (default: `%USERPROFILE%\source\repos\CursorWindowsSandbox`; prompted to confirm if omitted and `-Force` is not set)
 
-Or clone instead:
+#### Clone
 
 ```powershell
 git clone https://github.com/gerneio/CursorWindowsSandbox.git
 cd CursorWindowsSandbox
-# optional: .\scripts\Create-CursorSandboxWindowsContextMenu.ps1  (elevated)
 ```
 
+Optionally run `.\scripts\Create-CursorSandboxWindowsContextMenu.ps1` for the Explorer entry.
 
+<details>
+<summary>Test <code>install.ps1</code> locally</summary>
+
+Same flow as the remote one-liner, without fetching from GitHub:
+
+```powershell
+Get-Content .\install.ps1 -Raw | iex; Install-CursorWindowsSandbox -RegisterContextMenu
+```
+
+</details>
+
+> [!WARNING]
+> If PowerShell blocks scripts, adjust execution policy for your user (for example `RemoteSigned` after a clone), or run a single script with `-ExecutionPolicy Bypass`. Files from the zip/`irm` install may also carry Mark of the Web—unblock them if needed (`Unblock-File`) rather than setting a permanent Bypass policy.
 
 ### Launch
+
+> [!WARNING]
+> On the first connection, Cursor may ask for the remote operating system. Select **Windows**; Cursor will remember the choice for subsequent runs.
 
 If you registered the Explorer context menu, right-click a folder (or empty space in a folder) and choose **Open with Cursor Sandbox**.
 
@@ -68,9 +83,12 @@ Or run the start script from this repo (or pass an absolute path):
 # omit -MappedFolder to use the current directory
 ```
 
-Either path starts the sandbox if needed, waits for SSH, shares the folder, and opens Cursor remotely. Do not open the `.wsb` file directly.
+Both methods launch or reuse the sandbox, wait for SSH, map the requested folder, and open it in Cursor remotely.
 
-First boot installs WinGet, SSH, Terminal, the Cursor server, and anything in `winget-apps.json`—expect several minutes. Later runs reuse the package cache when possible.
+First boot installs WinGet, SSH, Terminal, the Cursor server, and anything in `winget-apps.json` onto the sandbox—expect several minutes before your local Cursor IDE is opened with the remote target folder. Later runs reuse the package cache when possible.
+
+> [!WARNING]
+> Always launch through the script or context menu. The `.wsb` file is a template used by the launch scripts; opening it directly skips required setup, so the sandbox will fail to start.
 
 ### Folder mappings
 
@@ -169,7 +187,7 @@ Optional WinGet [import](https://learn.microsoft.com/en-us/windows/package-manag
 
 ### Explorer context menu (`scripts/Create-CursorSandboxWindowsContextMenu.ps1`)
 
-Optional: register “Open with Cursor Sandbox” on folders in Explorer. Prefer `Install-CursorWindowsSandbox -RegisterContextMenu`, or run this script elevated after a clone.
+Optional: register “Open with Cursor Sandbox” on folders in Explorer. Prefer `Install-CursorWindowsSandbox -RegisterContextMenu`, or run this script after a clone.
 
 ## Faster workflows
 

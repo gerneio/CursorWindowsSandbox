@@ -24,8 +24,8 @@ $PreArguments     = "-NoProfile -ExecutionPolicy Bypass -File `"$MyScript`" $MyS
 # =========================================================================
 
 # Define registry pathways
-$FolderKey     = "Registry::HKEY_CLASSES_ROOT\Directory\shell\$RegistryKeyName"
-$BackgroundKey = "Registry::HKEY_CLASSES_ROOT\Directory\Background\shell\$RegistryKeyName"
+$FolderKey     = "HKCU:\Software\Classes\Directory\shell\$RegistryKeyName"
+$BackgroundKey = "HKCU:\Software\Classes\Directory\Background\shell\$RegistryKeyName"
 
 # Dynamically compile the universal execution strings with strict nested quote boundaries
 $FolderCommandString     = "`"$TargetExecutable`" $PreArguments `"%1`""
