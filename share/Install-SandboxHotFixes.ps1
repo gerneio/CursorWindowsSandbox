@@ -30,7 +30,7 @@ Set-DarkTheme
 Remove-DesktopBG
 
 # Restart explorer to activate changes
-Stop-Process -Name explorer -Force; Start-Sleep -Seconds 2; Start-Process explorer
+Stop-Process -Name explorer -Force
 
 #endregion
 

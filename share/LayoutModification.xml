@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LayoutModificationTemplate
+  xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification"
+  xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout"
+  xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout"
+  Version="1">
+  <CustomTaskbarLayoutCollection PinListPlacement="Append">
+    <defaultlayout:TaskbarLayout>
+      <taskbar:TaskbarPinList>
+      </taskbar:TaskbarPinList>
+    </defaultlayout:TaskbarLayout>
+  </CustomTaskbarLayoutCollection>
+</LayoutModificationTemplate>

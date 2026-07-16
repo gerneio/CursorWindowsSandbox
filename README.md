@@ -177,6 +177,10 @@ cursor --folder-uri vscode-remote://ssh-remote+windows-sandbox/C:/Users/WDAGUtil
 
 Optional WinGet [import](https://learn.microsoft.com/en-us/windows/package-manager/winget/import) list installed after the core bootstrap. Edit `Packages` (or regenerate with `winget export -o winget-apps.json`) to preinstall tooling—for example the default includes `Microsoft.DotNet.SDK.10`. Delete or empty the file if you want no extra packages.
 
+### `share/LayoutModification.xml`
+
+Taskbar layout template used by [`Set-WinTaskbarPin`](share/Helpers.psm1#L10-L25). See [Customize the Windows 11 taskbar](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/customize-the-windows-11-taskbar) for advanced configuration.
+
 ### Always installed (scripted)
 
 `share/Install-Cursor.ps1` always installs `Microsoft.PowerShell` and `Microsoft.OpenSSH.Preview` via WinGet so SSH remoting works. Change that list only if you know you still have a working SSH server path.

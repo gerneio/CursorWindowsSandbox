@@ -8,12 +8,7 @@ Start-Transcript $HOME\desktop\Running-$scriptName.txt
 
 $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';
 
-function Start-LogMeasure($nm, $sc) {
-    Write-Host "## START[$nm]" -ForegroundColor Yellow
-    Measure-Command {
-        .$sc | Out-Default
-    } | % { Write-Host "## END[$nm] : $($_.ToString("hh\:mm\:ss\.fff"))`n" -ForegroundColor Yellow }
-}
+Import-Module "$PSScriptRoot\Helpers.psm1"
 
 $st = Get-Date
 
@@ -31,6 +26,13 @@ Start-LogMeasure "Install-WinGet" {
 
 Start-LogMeasure "Install-WinTerminal" {
     ."$PSScriptRoot\Install-WinTerminal.ps1"
+}
+
+Start-LogMeasure "Add Shortcuts" {
+    New-WinShortcut "Terminal" (Get-Item "$env:ProgramFiles\Windows Terminal\terminal-*\WindowsTerminal.exe").FullName
+
+    # Restart explorer to activate changes
+    Stop-Process -Name explorer -Force
 }
 
 Start-LogMeasure "Install-CursorServer" {
