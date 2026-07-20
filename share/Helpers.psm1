@@ -5,8 +5,6 @@ function Start-LogMeasure($nm, $sc) {
     } | % { Write-Host "## END[$nm] : $($_.ToString("hh\:mm\:ss\.fff"))`n" -ForegroundColor Yellow }
 }
 
-$WshShell = New-Object -COMObject WScript.Shell
-
 function Set-WinTaskbarPin($shortcutPath) {
     $layoutDirectory = "$env:LOCALAPPDATA\TaskbarLayout"
     $layoutPath = "$layoutDirectory\LayoutModification.xml"
@@ -26,16 +24,21 @@ function Set-WinTaskbarPin($shortcutPath) {
 
 function New-WinShortcut($name, $path) {
     if (!(Test-Path $path)) { Write-Warning "Shortcut path doesn't exist: $path" }
+    if (-not $script:WshShell) {
+        $script:WshShell = New-Object -COMObject WScript.Shell
+    }
 
     # desktop shortcut
-    $Shortcut = $WshShell.CreateShortcut("$HOME\Desktop\$name.lnk")
+    $Shortcut = $script:WshShell.CreateShortcut("$HOME\Desktop\$name.lnk")
     $Shortcut.TargetPath = $path
     $Shortcut.Save()
 
     # start menu shortcut
-    $Shortcut = $WshShell.CreateShortcut("$env:appdata\Microsoft\Windows\Start Menu\Programs\$name.lnk")
+    $Shortcut = $script:WshShell.CreateShortcut("$env:appdata\Microsoft\Windows\Start Menu\Programs\$name.lnk")
     $Shortcut.TargetPath = $path
     $Shortcut.Save()
 
     Set-WinTaskbarPin $path
 }
+
+Export-ModuleMember -Function Start-LogMeasure, New-WinShortcut

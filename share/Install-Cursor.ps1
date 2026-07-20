@@ -9,6 +9,7 @@ Start-Transcript $HOME\desktop\Running-$scriptName.txt
 $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';
 
 Import-Module "$PSScriptRoot\Helpers.psm1"
+Import-Module "$PSScriptRoot\PathShims.psm1"
 
 $st = Get-Date
 
@@ -51,6 +52,10 @@ Start-LogMeasure "Updating: ssh auth keys" {
 }
 
 Start-LogMeasure "Installing software via winget" {
+    # Telemetry optouts
+    [Environment]::SetEnvironmentVariable("DOTNET_CLI_TELEMETRY_OPTOUT", "1", "User");
+    [Environment]::SetEnvironmentVariable("POWERSHELL_TELEMETRY_OPTOUT", "1", "User");
+
     $SoftwareToInstall = @(
         "Microsoft.PowerShell"
         "Microsoft.OpenSSH.Preview"
@@ -64,13 +69,12 @@ Start-LogMeasure "Installing software via winget" {
 
     if (Test-path "$PSScriptRoot\winget-apps.json") {
         Start-LogMeasure "winget-apps.json" {
-            WinGet.exe import -i "$PSScriptRoot\winget-apps.json" --accept-source-agreements --accept-package-agreements --disable-interactivity
+            Invoke-PathShimRefresh -ArgumentList "$PSScriptRoot\winget-apps.json" {
+                param($ImportFile)
+                WinGet.exe import -i $ImportFile --accept-source-agreements --accept-package-agreements --disable-interactivity
+            }
         }
     }
-
-    # Telemetry optouts
-    [Environment]::SetEnvironmentVariable("DOTNET_CLI_TELEMETRY_OPTOUT", "1", "User");
-    [Environment]::SetEnvironmentVariable("POWERSHELL_TELEMETRY_OPTOUT", "1", "User");
 }
 
 #################################################################################################

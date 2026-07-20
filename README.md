@@ -177,9 +177,12 @@ cursor --folder-uri vscode-remote://ssh-remote+windows-sandbox/C:/Users/WDAGUtil
 
 Optional WinGet [import](https://learn.microsoft.com/en-us/windows/package-manager/winget/import) list installed after the core bootstrap. Edit `Packages` (or regenerate with `winget export -o winget-apps.json`) to preinstall tooling—for example the default includes `Microsoft.DotNet.SDK.10`. Delete or empty the file if you want no extra packages.
 
+> [!NOTE]
+> Commands installed after the remote Cursor session starts are re-exposed to the Cursor server/IDE process and its children through `%LOCALAPPDATA%\CursorSandbox\Links`, without restarting SSH/cursor-server.
+
 ### `share/LayoutModification.xml`
 
-Taskbar layout template used by [`Set-WinTaskbarPin`](share/Helpers.psm1#L10-L25). See [Customize the Windows 11 taskbar](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/customize-the-windows-11-taskbar) for advanced configuration.
+Customizable taskbar layout template used by [`Set-WinTaskbarPin`](share/Helpers.psm1#L10-L25). See [Customize the Windows 11 taskbar](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/customize-the-windows-11-taskbar) for advanced configuration.
 
 ### Always installed (scripted)
 
