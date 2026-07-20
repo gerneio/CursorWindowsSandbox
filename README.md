@@ -178,7 +178,7 @@ cursor --folder-uri vscode-remote://ssh-remote+windows-sandbox/C:/Users/WDAGUtil
 Optional WinGet [import](https://learn.microsoft.com/en-us/windows/package-manager/winget/import) list installed after the core bootstrap. Edit `Packages` (or regenerate with `winget export -o winget-apps.json`) to preinstall tooling—for example the default includes `Microsoft.DotNet.SDK.10`. Delete or empty the file if you want no extra packages.
 
 > [!NOTE]
-> Commands installed after the remote Cursor session starts are re-exposed to the Cursor server/IDE process and its children through `%LOCALAPPDATA%\CursorSandbox\Links`, without restarting SSH/cursor-server.
+> During bootstrap, newly installed commands are temporarily re-exposed through `%LOCALAPPDATA%\CursorSandbox\Links` path shims so the current remote cursor session can resolve them before a restart. Those shims are removed from `PATH` when the WinGet import finishes. An already-running Cursor server still keeps its original environment—after packages install (or if a tool is missing in the remote IDE), manually run **Remote-SSH: Kill Remote Server on Host** from the Command Palette (`F1`) and reconnect so the server picks up the updated Machine/User `PATH`. See [Remote Development troubleshooting](https://code.visualstudio.com/docs/remote/troubleshooting).
 
 ### `share/LayoutModification.xml`
 
