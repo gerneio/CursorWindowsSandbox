@@ -6,32 +6,59 @@
     Package installers (e.g. winget) write new directories to the persisted Machine/User
     PATH, but the current process environment does not pick those up until it is
     restarted. During sandbox setup we need newly installed commands (dotnet, etc.)
-    to resolve immediately in this session and in child processes.
+    to resolve immediately in this session and in already-running processes such as
+    cursor-server (which keep their original environment block).
 
-    This module places a shim directory on PATH and, as persisted PATH entries appear,
-    writes small .cmd wrappers there that forward to the real binaries. After startup
-    installs finish, Unregister-PathShims removes the shim directory from PATH and
-    rebuilds the process PATH from Machine+User so later sessions use the real paths.
+    On import, this module reserves %LOCALAPPDATA%\CursorSandbox\VirtLink1..VirtLinkN on
+    User/Process PATH before those processes start (dirs need not exist yet). As new
+    persisted PATH entries appear, it creates VirtLinkN as a directory junction to the
+    real install directory.
+
+    After startup installs finish, Unregister-PathShims removes VirtLink entries from
+    PATH and rebuilds the process PATH from Machine+User. Junctions are left on disk
+    so an already-running cursor-server that inherited VirtLinks keeps resolving tools
+    until it is restarted.
 #>
 
+function Get-PathVirtLinkDirectories {
+    1..$script:PathVirtLinkSlotCount | % { Join-Path $script:PathVirtLinkRoot "VirtLink$_" }
+}
+
+function Test-IsPathVirtLinkDirectory([string]$Path) {
+    if (-not $Path) { return $false }
+    $name = Split-Path -Leaf $Path
+    if ($name -notmatch '^VirtLink\d+$') { return $false }
+    [string]::Compare((Split-Path -Parent $Path), $script:PathVirtLinkRoot, $true) -eq 0
+}
+
 function Initialize-PathShims {
-    $shimDirectory = "$env:LOCALAPPDATA\CursorSandbox\Links"
-    New-Item -ItemType Directory -Path $shimDirectory -Force | Out-Null
-    Get-ChildItem -LiteralPath $shimDirectory -File | ? { $_.LinkType -eq "SymbolicLink" } | Remove-Item -Force
+    # Reserve PATH slots early so cursor-server inherits them. Junctions are created
+    # later only for PATH dirs that actually appear (fresh sandbox; dirs may be missing).
+    $virtLinkDirs = @(Get-PathVirtLinkDirectories)
+
     foreach ($target in @("User", "Process")) {
         $path = [Environment]::GetEnvironmentVariable("Path", $target)
-        if (@($path -split ';') -notcontains $shimDirectory) {
-            [Environment]::SetEnvironmentVariable("Path", (@($path, $shimDirectory) | ? { $_ }) -join ';', $target)
+        $entries = [System.Collections.Generic.List[string]]::new(
+            [string[]]@($path -split ';' | ? { $_ })
+        )
+        foreach ($dir in $virtLinkDirs) {
+            if (-not ($entries | ? { [string]::Compare($_, $dir, $true) -eq 0 })) {
+                [void]$entries.Add($dir)
+            }
         }
+        [Environment]::SetEnvironmentVariable("Path", ($entries -join ';'), $target)
     }
-    $shimDirectory
+
+    $virtLinkDirs
 }
 
 function Unregister-PathShims {
-    $shimDirectory = $script:PathShimDirectory
     foreach ($target in @("User", "Process")) {
         $path = [Environment]::GetEnvironmentVariable("Path", $target)
-        $entries = @($path -split ';' | ? { $_ -and [string]::Compare($_, $shimDirectory, $true) -ne 0 })
+        $entries = @(
+            $path -split ';' |
+                ? { $_ -and -not (Test-IsPathVirtLinkDirectory $_) }
+        )
         [Environment]::SetEnvironmentVariable("Path", ($entries -join ';'), $target)
     }
 
@@ -51,37 +78,30 @@ function Get-PersistedPathEntries {
 }
 
 function New-PathCommandShims($PathEntries) {
-    $commandExtensions = @($env:PATHEXT -split ';')
     foreach ($pathEntry in $PathEntries) {
         $pathEntry = [Environment]::ExpandEnvironmentVariables($pathEntry)
-        if (-not (Test-Path -LiteralPath $pathEntry -PathType Container)) {
+        if (
+            -not (Test-Path -LiteralPath $pathEntry -PathType Container)
+            -or (Test-IsPathVirtLinkDirectory $pathEntry)
+            -or $script:PathVirtLinkAssignedTargets.Contains($pathEntry)
+        ) {
             continue
         }
 
-        $commands = Get-ChildItem -LiteralPath $pathEntry -File |
-            ? { $_.Extension -in $commandExtensions } |
-            Sort-Object @{ Expression = { $commandExtensions.IndexOf($_.Extension.ToUpperInvariant()) } }, Name
+        if ($script:PathVirtLinkNextSlot -gt $script:PathVirtLinkSlotCount) {
+            Write-Warning "No free VirtLink slots left; cannot junction to '$pathEntry'."
+            continue
+        }
 
-        foreach ($command in $commands) {
-            # Already processed this command on a previous refresh.
-            if ($script:PathShimProcessedCommands.Contains($command.FullName)) {
-                continue
-            }
-
-            $shimPath = Join-Path $script:PathShimDirectory "$($command.BaseName).cmd"
-            if (Test-Path -LiteralPath $shimPath) {
-                Write-Warning "Command shim '$($command.BaseName)' already exists; ignoring '$($command.FullName)'."
-                [void]$script:PathShimProcessedCommands.Add($command.FullName)
-                continue
-            }
-
-            try {
-                $invoke = if ($command.Extension -in @(".cmd", ".bat")) { "call " } else { "" }
-                "@$invoke`"$($command.FullName)`" %*" | Set-Content -LiteralPath $shimPath -Encoding Ascii
-                [void]$script:PathShimProcessedCommands.Add($command.FullName)
-            } catch {
-                Write-Warning "Could not create command shim '$shimPath' for '$($command.FullName)': $($_.Exception.Message)"
-            }
+        $slotPath = Join-Path $script:PathVirtLinkRoot "VirtLink$($script:PathVirtLinkNextSlot)"
+        try {
+            New-Item -ItemType Directory -Path $script:PathVirtLinkRoot -Force | Out-Null
+            $null = New-Item -ItemType Junction -Path $slotPath -Target $pathEntry
+            [void]$script:PathVirtLinkAssignedTargets.Add($pathEntry)
+            $script:PathVirtLinkAssignments[$slotPath] = $pathEntry
+            $script:PathVirtLinkNextSlot++
+        } catch {
+            Write-Warning "Could not create VirtLink junction '$slotPath' -> '$pathEntry': $($_.Exception.Message)"
         }
     }
 }
@@ -92,7 +112,9 @@ function Invoke-PathShimRefresh($sc, $ArgumentList = @()) {
         [string[]]@(Get-PersistedPathEntries),
         [StringComparer]::OrdinalIgnoreCase
     )
-    $script:PathShimProcessedCommands = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $script:PathVirtLinkAssignedTargets = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $script:PathVirtLinkAssignments = [ordered]@{}
+    $script:PathVirtLinkNextSlot = 1
     $sourceIdentifier = "PathShimRefresh.$([Guid]::NewGuid())"
     $refresh = {
         $newPathEntries = @(Get-PersistedPathEntries | ? { -not $script:PathShimPathBefore.Contains($_) } | Select-Object -Unique)
@@ -128,14 +150,20 @@ function Invoke-PathShimRefresh($sc, $ArgumentList = @()) {
         Remove-Job $timerJob -Force -ErrorAction SilentlyContinue
         $timer.Dispose()
         & $refresh
-        if ($script:PathShimProcessedCommands.Count) {
-            Write-Host "Created path shims for $($script:PathShimProcessedCommands.Count) command(s):"
-            $script:PathShimProcessedCommands | Sort-Object | % { Write-Host "  $_" }
+        if ($script:PathVirtLinkAssignments.Count) {
+            Write-Host "Created temporary VirtLink junctions for $($script:PathVirtLinkAssignments.Count) PATH dir(s):" -ForegroundColor DarkCyan
+            $script:PathVirtLinkAssignments.GetEnumerator() | % {
+                Write-Host "  $($_.Key) -> $($_.Value)" -ForegroundColor DarkCyan
+            }
         }
-        Remove-Variable PathShimPathBefore, PathShimProcessedCommands -Scope Script -ErrorAction SilentlyContinue
+        Remove-Variable PathShimPathBefore, PathVirtLinkAssignedTargets, PathVirtLinkAssignments, PathVirtLinkNextSlot -Scope Script -ErrorAction SilentlyContinue
         Unregister-PathShims
     }
 }
 
-$script:PathShimDirectory = Initialize-PathShims
+# TODO: make configurable (or calculate per winget-apps.json list size)
+$script:PathVirtLinkSlotCount = 15
+$script:PathVirtLinkRoot = "$env:LOCALAPPDATA\CursorSandbox"
+$script:PathVirtLinkDirectories = Initialize-PathShims
+
 Export-ModuleMember -Function Invoke-PathShimRefresh
