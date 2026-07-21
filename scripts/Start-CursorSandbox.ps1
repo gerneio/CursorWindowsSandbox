@@ -6,6 +6,9 @@ param (
 $ErrorActionPreference = "Stop"
 $PSDefaultParameterValues['Write-Verbose:Verbose'] = $Verbose
 
+Import-Module (Join-Path $PSScriptRoot 'SandboxHostingConfig.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'SandboxMount.psm1') -Force
+
 function Stop-Script {
     param([int]$ExitCode = 0)
     Write-Warning "Exiting..."
@@ -225,24 +228,6 @@ function Get-SandboxConnectionInfo {
     }
 }
 
-function Mount-SandboxFolder {
-    param(
-        [guid]$Id,
-        [string]$HostPath
-    )
-
-    $sandboxFolder = Join-Path $SandboxRootFolder (Split-Path $HostPath -Leaf)
-
-    # TODO: prompt to confirm that this will allow the sandbox to write to this folder
-    Write-Warning "Mapping folder as writable:`n`t$HostPath <> $sandboxFolder"
-    $null = wsb share --id $Id --host-path $HostPath --sandbox-path $sandboxFolder --allow-write
-
-    # Open root folder on sandbox for visibility
-    $null = wsb exec --id $Id -r ExistingLogin -c "cmd.exe /c start $SandboxRootFolder"
-
-    return $sandboxFolder
-}
-
 function Ensure-SshHostEntry {
     Ensure-SshKeys
 
@@ -335,7 +320,7 @@ function Start-RemoteCursor {
 
 #region Config
 $SandboxProcessName = "vmmemWindowsSandbox"
-$SandboxRootFolder = "C:\Users\WDAGUtilityAccount\source\repos"
+$SandboxRootFolder = "C:\host"
 $ShareFolder = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\share"))
 $SshConfigFile = "$env:USERPROFILE\.ssh\config"
 $SshHostAlias = "windows-sandbox"
@@ -343,8 +328,25 @@ $SshIdentityFile = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.s
 $StartupTimeoutSeconds = 120
 #endregion
 
-Assert-MappedFolder $MappedFolder
 Assert-Prerequisites
+
+$MappedFolder = [System.IO.Path]::GetFullPath($MappedFolder)
+Assert-MappedFolder $MappedFolder
+try {
+    $SandboxHostingConfig = Get-SandboxHostingConfig -MappedFolder $MappedFolder
+} catch {
+    Stop-WithWarning $_.Exception.Message
+}
+if ($SandboxHostingConfig.SandboxRootFolder) {
+    $SandboxRootFolder = $SandboxHostingConfig.SandboxRootFolder
+    Write-Verbose "SandboxRootFolder override: $SandboxRootFolder"
+}
+if ($SandboxHostingConfig.FolderMappings.Count -gt 0) {
+    Write-Verbose ("Loaded {0} folderMappings for {1}" -f $SandboxHostingConfig.FolderMappings.Count, $MappedFolder)
+    $SandboxHostingConfig.FolderMappings | ForEach-Object {
+        Assert-MappedFolder $_.Path
+    }
+}
 $WsbConfigPath = Resolve-WsbConfigPath
 
 Ensure-SshHostEntry
@@ -356,7 +358,11 @@ if ($tempWsbFile) {
 }
 
 $sandbox = Get-SandboxConnectionInfo
-$sandboxFolder = Mount-SandboxFolder -Id $sandbox.Id -HostPath $MappedFolder
+$sandboxFolder = Mount-MappedFolders `
+    -Id $sandbox.Id `
+    -PrimaryHostPath $MappedFolder `
+    -SandboxRootFolder $SandboxRootFolder `
+    -FolderMappings $SandboxHostingConfig.FolderMappings
 
 Update-SshConfig -IpAddress $sandbox.Ip
 Wait-SshPort -IpAddress $sandbox.Ip

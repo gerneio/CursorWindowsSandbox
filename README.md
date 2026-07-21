@@ -10,7 +10,7 @@ This project wires that up for Cursor remote development:
 
 1. Launch a sandbox with a known configuration (`.wsb`).
 2. On first logon, install enough inside the sandbox for Cursor to connect (SSH, server bits, package managers, optional apps).
-3. Share a host folder into the sandbox and open it in Cursor via SSH remote.
+3. Share one or more host folders into the sandbox and open the primary folder in Cursor via SSH remote.
 
 The host-side scripts (`scripts/`) start the sandbox, wait for SSH, map folders, and launch Cursor. The share folder (`share/`) is mounted read-only into the sandbox and holds the logon bootstrap and install scripts that run inside it. The sandbox still has network access and runs elevated inside the VM—so prefer a narrow `-MappedFolder`, and assume anything written there (or fetched over the network into that tree) is in the agent’s reach.
 
@@ -97,9 +97,8 @@ First boot installs WinGet, SSH, Terminal, the Cursor server, and anything in `w
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Repo `share/`                | `C:\Users\WDAGUtilityAccount\.sandbox` (read-only bootstrap)                                                         |
 | `%TEMP%\SandboxPackageCache` | `C:\PackageCache` (download cache)                                                                                   |
-| `-MappedFolder`              | `C:\Users\WDAGUtilityAccount\source\repos\<folder-name>` (**writable**—treat this as the agent’s host write surface) |
-
-
+| `-MappedFolder`              | `C:\host\<folder-name>` by default (**writable**); customize root via [Hosting config](#hosting-config-sandboxconfigjson) |
+| Extra folders from config    | Same sandbox root tree; **read-only** unless `"writable": true`                                                      |
 
 
 ### Sessions
@@ -162,12 +161,57 @@ To open the current workspace over the sandbox from inside an editor, add a `tas
 If the sandbox is already up and the folder is mapped, you can instead open with our start/context script, or use:
 
 ```text
-cursor --folder-uri vscode-remote://ssh-remote+windows-sandbox/C:/Users/WDAGUtilityAccount/source/repos/${workspaceFolderBasename}
+cursor --folder-uri vscode-remote://ssh-remote+windows-sandbox/C:/host/${workspaceFolderBasename}
 ```
 
 
 
 ## Configuration
+
+### Hosting config (`.sandbox/config.json`)
+
+Optional launch settings for [`Start-CursorSandbox.ps1`](scripts/Start-CursorSandbox.ps1), read from the CursorWindowsSandbox install root:
+
+`<install>/.sandbox/config.json`
+
+<details>
+<summary>Example <code>config.json</code>: schema and layout</summary>
+
+```json
+{
+  "global": {
+    "sandboxRootFolder": "C:\\shared"
+  },
+  "%USERPROFILE%\\source\\repos\\MyApp": {
+    "sandboxRootFolder": "C:\\Users\\WDAGUtilityAccount\\source\\repos",
+    "folderMappings": [
+      { "path": "..\\SharedLib" },
+      { "path": "%USERPROFILE%\\source\\tools\\build", "writable": true }
+    ]
+  }
+}
+```
+
+| Field | Where | Meaning |
+| ----- | ----- | ------- |
+| Top-level path keys | Root of the file | Match `-MappedFolder` after `%VAR%` expansion and full-path normalize (case-insensitive). Non-path keys such as `global` are ignored as project entries. |
+| `folderMappings` | Per project | Extra host folders to share. `path` may be relative to `-MappedFolder` or absolute; `%VAR%` expansion applies. Omit `writable` → read-only; `"writable": true` → writable. |
+| `sandboxRootFolder` | Per project or `global` | Absolute path **inside the sandbox** where shares are rooted (no host env expansion). Per-project overrides `global`; if neither is set, the start script default is `C:\host`. |
+
+Missing file or no matching project key → primary `-MappedFolder` only (previous behavior).
+
+With no extra folders, the primary mapped folder uses a leaf-name path under the sandbox root (`C:\host\<folder-name>` by default). When `folderMappings` are configured, shares are placed under a common-ancestor layout so relative paths between those folders still work inside the sandbox (the ancestor itself is not shared wholesale; calculated on best-effort basis).
+
+Example: `-MappedFolder` `C:\Users\you\source\repos\MyApp` with `folderMappings` path `..\SharedLib` →
+
+| Host | Sandbox (default root `C:\host`) |
+| ---- | -------------------------------- |
+| `C:\Users\you\source\repos\MyApp` | `C:\host\repos\MyApp` |
+| `C:\Users\you\source\repos\SharedLib` | `C:\host\repos\SharedLib` |
+
+Common ancestor is `..\source\repos`; only those two folders are shared, not the whole `repos` tree.
+
+</details>
 
 ### `wsb/Windows Sandbox Cursor.wsb`
 
@@ -190,7 +234,7 @@ Customizable taskbar layout template used by [`Set-WinTaskbarPin`](share/Helpers
 
 ### Host launch script (`scripts/Start-CursorSandbox.ps1`)
 
-`-MappedFolder` is the host folder shared into the sandbox and opened in Cursor (defaults to the current directory)—prefer a project directory you intend the agent to touch, not a broad path like your user profile. SSH keys are created under `.ssh/` (private) and `share/.ssh-host/` (public, read by the sandbox) the first time you launch if missing (`Create-SSHKeys.ps1`).
+`-MappedFolder` is the host folder shared into the sandbox and opened in Cursor (defaults to the current directory)—prefer a project directory you intend the agent to touch, not a broad path like your user profile. Additional folders and the in-sandbox root can be configured via [`.sandbox/config.json`](#hosting-config-sandboxconfigjson). SSH keys are created under `.ssh/` (private) and `share/.ssh-host/` (public, read by the sandbox) the first time you launch if missing (`Create-SSHKeys.ps1`).
 
 ### Explorer context menu (`scripts/Create-CursorSandboxWindowsContextMenu.ps1`)
 

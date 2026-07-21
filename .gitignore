@@ -1,2 +1,3 @@
 .ssh/
 share/.ssh-host/
+.sandbox/

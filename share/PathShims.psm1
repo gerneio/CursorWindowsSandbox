@@ -81,8 +81,8 @@ function New-PathCommandShims($PathEntries) {
     foreach ($pathEntry in $PathEntries) {
         $pathEntry = [Environment]::ExpandEnvironmentVariables($pathEntry)
         if (
-            -not (Test-Path -LiteralPath $pathEntry -PathType Container)
-            -or (Test-IsPathVirtLinkDirectory $pathEntry)
+            -not (Test-Path -LiteralPath $pathEntry -PathType Container) `
+            -or (Test-IsPathVirtLinkDirectory $pathEntry) `
             -or $script:PathVirtLinkAssignedTargets.Contains($pathEntry)
         ) {
             continue
