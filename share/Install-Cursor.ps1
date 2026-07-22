@@ -11,6 +11,23 @@ $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';
 Import-Module "$PSScriptRoot\Helpers.psm1"
 Import-Module "$PSScriptRoot\PathShims.psm1"
 
+$hooksPath = Join-Path $PSScriptRoot 'SandboxInstallHooks.psm1'
+if (Test-Path -LiteralPath $hooksPath) {
+    Import-Module -Name $hooksPath -Force
+}
+
+function Invoke-OptionalInstallHook {
+    param([Parameter(Mandatory)][ValidateSet(
+        'Invoke-SandboxInstallStarted',
+        'Invoke-SandboxInstallBeforeCursor',
+        'Invoke-SandboxInstallAfterCursor',
+        'Invoke-SandboxInstallCompleted'
+    )][string]$Name)
+
+    if (-not (Get-Command -Name $Name -ErrorAction SilentlyContinue)) { return }
+    Start-LogMeasure "Hook $Name" { & $Name }
+}
+
 $st = Get-Date
 
 Write-Host "${scriptName}: $st" -ForegroundColor Green
@@ -20,6 +37,8 @@ Write-Host "${scriptName}: $st" -ForegroundColor Green
 Start-LogMeasure "Install-SandboxHotFixes" {
     ."$PSScriptRoot\Install-SandboxHotFixes.ps1"
 }
+
+Invoke-OptionalInstallHook -Name Invoke-SandboxInstallStarted
 
 Start-LogMeasure "Install-WinGet" {
     ."$PSScriptRoot\Install-WinGet.ps1"
@@ -35,6 +54,8 @@ Start-LogMeasure "Add Shortcuts" {
     # Restart explorer to activate changes
     Stop-Process -Name explorer -Force
 }
+
+Invoke-OptionalInstallHook -Name Invoke-SandboxInstallBeforeCursor
 
 Start-LogMeasure "Install-CursorServer" {
     # Installs it but doesn't run it (host cursor IDE will take care of that)
@@ -78,6 +99,8 @@ if (Test-Path "$PSScriptRoot\cursor-extensions.json") {
     }
 }
 
+Invoke-OptionalInstallHook -Name Invoke-SandboxInstallAfterCursor
+
 Start-LogMeasure "Updating: ssh auth keys" {
     $authorizedKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
     [System.IO.Directory]::CreateDirectory((Split-Path $authorizedKeys)) | Out-Null
@@ -112,6 +135,8 @@ Start-LogMeasure "Installing software via winget" {
         }
     }
 }
+
+Invoke-OptionalInstallHook -Name Invoke-SandboxInstallCompleted
 
 #################################################################################################
 

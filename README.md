@@ -1,4 +1,4 @@
-# Cursor Windows Sandbox
+﻿# Cursor Windows Sandbox
 
 Let agents run with real Windows tooling without handing them your host: Cursor over SSH into an ephemeral [Windows Sandbox](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-overview).
 
@@ -237,6 +237,37 @@ Optional JSON array of Cursor/VS Code extensions installed into the sandbox Curs
 	"anysphere.csharp",
 	"https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.140.9/vspackage?targetPlatform=win32-x64"
 ]
+```
+
+</details>
+
+### `share/SandboxInstallHooks.psm1`
+
+Optional PowerShell module loaded by [`Install-Cursor.ps1`](share/Install-Cursor.ps1) during sandbox bootstrap. If the file is missing, install continues unchanged. Define and export only the lifecycle functions you need; missing names are skipped.
+
+| Function | When |
+| -------- | ---- |
+| `Invoke-SandboxInstallStarted` | After sandbox hotfixes, before WinGet/Terminal |
+| `Invoke-SandboxInstallBeforeCursor` | After Terminal/shortcuts, before Cursor server |
+| `Invoke-SandboxInstallAfterCursor` | After Cursor server + extensions, before SSH keys / OpenSSH |
+| `Invoke-SandboxInstallCompleted` | After winget software installs, before the end of script |
+
+<details>
+<summary>Example <code>SandboxInstallHooks.psm1</code></summary>
+
+```powershell
+function Invoke-SandboxInstallAfterCursor {
+    Write-Host "Custom step after Cursor extensions..."
+}
+
+function Invoke-SandboxInstallCompleted {
+    Write-Host "Custom bootstrap finished"
+}
+
+Export-ModuleMember -Function @(
+    'Invoke-SandboxInstallAfterCursor'
+    'Invoke-SandboxInstallCompleted'
+)
 ```
 
 </details>

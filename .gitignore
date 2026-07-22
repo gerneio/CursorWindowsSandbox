@@ -1,4 +1,5 @@
 .ssh/
 share/.ssh-host/
 share/cursor-extensions.json
+share/SandboxInstallHooks.psm1
 .sandbox/
