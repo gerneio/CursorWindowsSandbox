@@ -1,3 +1,4 @@
 .ssh/
 share/.ssh-host/
+share/cursor-extensions.json
 .sandbox/

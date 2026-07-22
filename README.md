@@ -1,4 +1,4 @@
-﻿# Cursor Windows Sandbox
+# Cursor Windows Sandbox
 
 Let agents run with real Windows tooling without handing them your host: Cursor over SSH into an ephemeral [Windows Sandbox](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-overview).
 
@@ -81,11 +81,12 @@ Or run the start script from this repo (or pass an absolute path):
 ```powershell
 .\scripts\Start-CursorSandbox.ps1 -MappedFolder 'C:\path\to\project'
 # omit -MappedFolder to use the current directory
+# add -SkipIDELaunch to prepare the sandbox without opening Cursor
 ```
 
-Both methods launch or reuse the sandbox, wait for SSH, map the requested folder, and open it in Cursor remotely.
+Both methods launch or reuse the sandbox, wait for SSH, map the requested folder, and open it in Cursor remotely (unless you pass `-SkipIDELaunch`).
 
-First boot installs WinGet, SSH, Terminal, the Cursor server, and anything in `winget-apps.json` onto the sandbox—expect several minutes before your local Cursor IDE is opened with the remote target folder. Later runs reuse the package cache when possible.
+First boot installs WinGet, SSH, Terminal, the Cursor server, and anything in `winget-apps.json` / `cursor-extensions.json` onto the sandbox—expect several minutes before your local Cursor IDE is opened with the remote target folder. Later runs reuse the package cache when possible.
 
 > [!WARNING]
 > Always launch through the script or context menu. The `.wsb` file is a template used by the launch scripts; opening it directly skips required setup, so the sandbox will fail to start.
@@ -224,6 +225,22 @@ Optional WinGet [import](https://learn.microsoft.com/en-us/windows/package-manag
 > [!NOTE]
 > During bootstrap, newly installed commands are temporarily re-exposed through `%LOCALAPPDATA%\CursorSandbox\VirtLink#` on `PATH` as directory junction links, so the current remote cursor session can resolve these new packages/tools without a full restart. Those entries are removed from persisted `PATH` when the WinGet import finishes, however an already-running Cursor server will still keep its original environment until retarted. After packages install (or if a tool is missing in the remote IDE), manually run `Remote-SSH: Kill Remote Server on Host` from the Command Palette (`F1`) and reconnect so the remote cursor server picks up the updated Machine/User `PATH`. See [Remote Development troubleshooting](https://code.visualstudio.com/docs/remote/troubleshooting).
 
+### `share/cursor-extensions.json`
+
+Optional JSON array of Cursor/VS Code extensions installed into the sandbox Cursor server after it is downloaded. Each entry is either an extension id (`publisher.name`) or an absolute URL to a `.vsix`. Omit or delete the file to skip extension install.
+
+<details>
+<summary>Example <code>cursor-extensions.json</code></summary>
+
+```json
+[
+	"anysphere.csharp",
+	"https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.140.9/vspackage?targetPlatform=win32-x64"
+]
+```
+
+</details>
+
 ### `share/LayoutModification.xml`
 
 Customizable taskbar layout template used by [`Set-WinTaskbarPin`](share/Helpers.psm1#L10-L25). See [Customize the Windows 11 taskbar](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/customize-the-windows-11-taskbar) for advanced configuration.
@@ -234,7 +251,7 @@ Customizable taskbar layout template used by [`Set-WinTaskbarPin`](share/Helpers
 
 ### Host launch script (`scripts/Start-CursorSandbox.ps1`)
 
-`-MappedFolder` is the host folder shared into the sandbox and opened in Cursor (defaults to the current directory)—prefer a project directory you intend the agent to touch, not a broad path like your user profile. Additional folders and the in-sandbox root can be configured via [`.sandbox/config.json`](#hosting-config-sandboxconfigjson). SSH keys are created under `.ssh/` (private) and `share/.ssh-host/` (public, read by the sandbox) the first time you launch if missing (`Create-SSHKeys.ps1`).
+`-MappedFolder` is the host folder shared into the sandbox and opened in Cursor (defaults to the current directory)—prefer a project directory you intend the agent to touch, not a broad path like your user profile. Additional folders and the in-sandbox root can be configured via [`.sandbox/config.json`](#hosting-config-sandboxconfigjson). `-SkipIDELaunch` starts or reuses the sandbox, mounts folders, and updates SSH config without waiting for SSH or opening Cursor. SSH keys are created under `.ssh/` (private) and `share/.ssh-host/` (public, read by the sandbox) the first time you launch if missing (`Create-SSHKeys.ps1`).
 
 ### Explorer context menu (`scripts/Create-CursorSandboxWindowsContextMenu.ps1`)
 

@@ -42,6 +42,42 @@ Start-LogMeasure "Install-CursorServer" {
     &"$PSScriptRoot\Install-CursorServer.ps1" -Commit $CursorCommit
 }
 
+if (Test-Path "$PSScriptRoot\cursor-extensions.json") {
+    Start-LogMeasure "Install cursor extensions" {
+        $cursorServerCmd = Get-ChildItem -Path "$HOME\.cursor-server\bin" -Recurse -Filter "cursor-server.cmd" |
+            Select-Object -First 1 -ExpandProperty FullName
+        if (-not $cursorServerCmd) {
+            throw "Could not find cursor-server.cmd under $HOME\.cursor-server\bin"
+        }
+
+        # Disables unnecessary depreciation warnings when calling cursor/node
+        $env:NODE_OPTIONS = "--no-warnings";
+
+        $extensions = Get-Content -LiteralPath "$PSScriptRoot\cursor-extensions.json" -Raw | ConvertFrom-Json
+        foreach ($ext in $extensions) {
+            Start-LogMeasure $ext {
+                $installTarget = $ext
+                $downloadedVsix = $null
+                if ([System.Uri]::IsWellFormedUriString($ext, [System.UriKind]::Absolute)) {
+                    $downloadedVsix = Join-Path $env:TEMP "$([guid]::NewGuid()).vsix"
+                    Write-Host "Downloading VSIX: $ext -> $downloadedVsix"
+                    Invoke-WebRequest -Uri $ext -OutFile $downloadedVsix
+                    $installTarget = $downloadedVsix
+                }
+
+                try {
+                    & $cursorServerCmd --install-extension $installTarget --force
+                }
+                finally {
+                    if ($downloadedVsix -and (Test-Path -LiteralPath $downloadedVsix)) {
+                        Remove-Item -LiteralPath $downloadedVsix -Force
+                    }
+                }
+            }
+        }
+    }
+}
+
 Start-LogMeasure "Updating: ssh auth keys" {
     $authorizedKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
     [System.IO.Directory]::CreateDirectory((Split-Path $authorizedKeys)) | Out-Null

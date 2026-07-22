@@ -1,5 +1,20 @@
+<#
+.SYNOPSIS
+  Start (or reuse) Windows Sandbox with Cursor remoting for a host folder.
+
+.PARAMETER MappedFolder
+  Host folder shared into the sandbox and opened in Cursor. Defaults to the current directory.
+
+.PARAMETER SkipIDELaunch
+  Prepare the sandbox and SSH config only—do not wait for SSH or open Cursor remotely.
+  Useful when you want the VM up and folders mounted without launching the IDE.
+
+.PARAMETER Verbose
+  Enable verbose logging for this script and its Write-Verbose calls.
+#>
 param (
     [string]$MappedFolder = (Get-Location),
+    [switch]$SkipIDELaunch,
     [switch]$Verbose
 )
 
@@ -365,9 +380,10 @@ $sandboxFolder = Mount-MappedFolders `
     -FolderMappings $SandboxHostingConfig.FolderMappings
 
 Update-SshConfig -IpAddress $sandbox.Ip
-Wait-SshPort -IpAddress $sandbox.Ip
 
-Start-RemoteCursor -SandboxFolder $sandboxFolder
+if (-not $SkipIDELaunch) {
+    Wait-SshPort -IpAddress $sandbox.Ip
+    Start-RemoteCursor -SandboxFolder $sandboxFolder
+}
 
-# Read-Host "Press Enter to exit..."
 Stop-Script
